@@ -95,7 +95,7 @@ implementation
     {
         dummy.data[0] = diode;
         diode = !diode;
-        call ProtocolSend.send(0, &dummy, 1); //call Packet.payloadLength(&dummy)):
+        call ProtocolSend.send(1, &dummy, 1); //call Packet.payloadLength(&dummy)):
     }
 
     event void AMSend.sendDone(message_t * message, error_t error)
@@ -115,7 +115,7 @@ implementation
         int i = 0;
         protocol_message * msg = (protocol_message *)&proto_msg;
         msg->dest = destination;
-        msg->src = TOS_NODE_ID;
+        msg->src = source;
         for (i = 0; i < length; ++i)
         {
             msg->data[i] = message->data[i];
@@ -157,6 +157,11 @@ implementation
         }
 
         call Leds.led0Toggle();
+
+        if (pmsg->dest != TOS_NODE_ID)
+        {
+            send_message(pmsg->src, pmsg->dest, msg, len);
+        }
 
         return msg;
     }
