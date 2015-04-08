@@ -1,7 +1,7 @@
 // $Id: RadioCountToLedsC.nc,v 1.7 2010-06-29 22:07:17 scipio Exp $
 
-/*									tab:4
- * Copyright (c) 2000-2005 The Regents of the University  of California.  
+/*                                                                        tab:4
+ * Copyright (c) 2000-2005 The Regents of the University  of California.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,20 +34,20 @@
  * Copyright (c) 2002-2003 Intel Corporation
  * All rights reserved.
  *
- * This file is distributed under the terms in the attached INTEL-LICENSE     
+ * This file is distributed under the terms in the attached INTEL-LICENSE
  * file. If you do not find these files, copies can be found by writing to
- * Intel Research Berkeley, 2150 Shattuck Avenue, Suite 1300, Berkeley, CA, 
+ * Intel Research Berkeley, 2150 Shattuck Avenue, Suite 1300, Berkeley, CA,
  * 94704.  Attention:  Intel License Inquiry.
  */
- 
+
 #include "Timer.h"
 #include "RadioCountToLeds.h"
-#include "printf.h" 
+#include "printf.h"
 /**
- * Implementation of the RadioCountToLeds application. RadioCountToLeds 
- * maintains a 4Hz counter, broadcasting its value in an AM packet 
- * every time it gets updated. A RadioCountToLeds node that hears a counter 
- * displays the bottom three bits on its LEDs. This application is a useful 
+ * Implementation of the RadioCountToLeds application. RadioCountToLeds
+ * maintains a 4Hz counter, broadcasting its value in an AM packet
+ * every time it gets updated. A RadioCountToLeds node that hears a counter
+ * displays the bottom three bits on its LEDs. This application is a useful
  * test to show that basic AM communication and timers work.
  *
  * @author Philip Levis
@@ -75,7 +75,7 @@ implementation {
 
   bool locked;
   uint16_t counter = 0;
-  
+
   event void Boot.booted() {
     call AMControl.start();
   }
@@ -92,56 +92,56 @@ implementation {
   event void AMControl.stopDone(error_t err) {
     // do nothing
   }
-  
+
   event void MilliTimer.fired() {
     counter++;
     //dbg("RadioCountToLedsC", "RadioCountToLedsC: timer fired, counter is %hu.\n", counter);
-	//printf("RadioCountToLedsC", "RadioCountToLedsC: timer fired, counter is %hu.\n", counter);
-	
+        //printf("RadioCountToLedsC", "RadioCountToLedsC: timer fired, counter is %hu.\n", counter);
+
     if (locked) {
       return;
     }
     else {
       radio_count_msg_t* rcm = (radio_count_msg_t*)call Packet.getPayload(&packet, sizeof(radio_count_msg_t));
       if (rcm == NULL) {
-	return;
+        return;
       }
 
       rcm->counter = counter;
-	rcm->nodeid = TOS_NODE_ID;
+        rcm->nodeid = TOS_NODE_ID;
       if (call AMSend.send(AM_BROADCAST_ADDR, &packet, sizeof(radio_count_msg_t)) == SUCCESS) {
-	//printf("RadioCountToLedsC", "RadioCountToLedsC: packet sent.\n", counter);	
-	printf("Wysylam: counter= %d, nodeid = %d\n",rcm->counter, rcm->nodeid);
-	locked = TRUE;
+        //printf("RadioCountToLedsC", "RadioCountToLedsC: packet sent.\n", counter);
+        printf("Wysylam: counter= %d, nodeid = %d\n",rcm->counter, rcm->nodeid);
+        locked = TRUE;
       }
     }
   }
 
-  event message_t* Receive.receive(message_t* bufPtr, 
-				   void* payload, uint8_t len) {
+  event message_t* Receive.receive(message_t* bufPtr,
+                                   void* payload, uint8_t len) {
    // printf("RadioCountToLedsC", "Received packet of length %hhu.\n", len);
 
     if (len != sizeof(radio_count_msg_t)) {return bufPtr;}
     else {
       radio_count_msg_t* rcm = (radio_count_msg_t*)payload;
-	printf("Otrzymalem: counter= %d, nodeid = %d\n",rcm->counter, rcm->nodeid);
+        printf("Otrzymalem: counter= %d, nodeid = %d\n",rcm->counter, rcm->nodeid);
       if (rcm->counter & 0x1) {
-	call Leds.led0On();
+        call Leds.led0On();
       }
       else {
-	call Leds.led0Off();
+        call Leds.led0Off();
       }
       if (rcm->counter & 0x2) {
-	call Leds.led1On();
+        call Leds.led1On();
       }
       else {
-	call Leds.led1Off();
+        call Leds.led1Off();
       }
       if (rcm->counter & 0x4) {
-	call Leds.led2On();
+        call Leds.led2On();
       }
       else {
-	call Leds.led2Off();
+        call Leds.led2Off();
       }
       return bufPtr;
     }

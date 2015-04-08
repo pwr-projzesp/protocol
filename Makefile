@@ -1,7 +1,7 @@
 PFLAGS+=-DRF230_DEF_RFPOWER=10
 CFLAGS += -I$(TINYOS_OS_DIR)/lib/printf
 CFLAGS += -DNEW_PRINTF_SEMANTICS
-COMPONENT=RadioCountToLedsAppC
+COMPONENT=ProtocolAppC
 TOSMAKE_PRE_EXE_DEPS = RadioCountMsg.py RadioCountMsg.class
 TOSMAKE_CLEAN_EXTRA = RadioCountMsg.py RadioCountMsg.class RadioCountMsg.java
 

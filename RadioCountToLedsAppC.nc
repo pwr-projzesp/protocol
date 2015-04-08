@@ -64,7 +64,7 @@ implementation {
   components SerialStartC;
 
   App.Boot -> MainC.Boot;
-  
+
   App.Receive -> AMReceiverC;
   App.AMSend -> AMSenderC;
   App.AMControl -> ActiveMessageC;
