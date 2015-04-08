@@ -8,7 +8,7 @@ implementation
     components LedsC;
 
     components new AMSenderC(6) as Sender;
-    components new AMReceiverC(6);
+    components new AMReceiverC(6) as Receiver;
     components ActiveMessageC;
 
     components new TimerMilliC() as TimeoutTimer;
@@ -16,6 +16,7 @@ implementation
 
     Proto.Boot -> MainC.Boot;
     Proto.AMSend -> Sender;
+    Proto.ReceiveREQ -> Receiver;
     Proto.Packet -> Sender;
     Proto.AMControl -> ActiveMessageC;
     Proto.TimeoutTimer -> TimeoutTimer;

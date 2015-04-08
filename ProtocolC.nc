@@ -93,9 +93,12 @@ implementation
 
     event void SendTimer.fired()
     {
-        dummy.data[0] = diode;
-        diode = !diode;
-        call ProtocolSend.send(1, &dummy, 1); //call Packet.payloadLength(&dummy)):
+        if (TOS_NODE_ID != 1)
+        {
+            dummy.data[0] = diode;
+            diode = !diode;
+            call ProtocolSend.send(1, &dummy, 1); //call Packet.payloadLength(&dummy)):
+        }
     }
 
     event void AMSend.sendDone(message_t * message, error_t error)
