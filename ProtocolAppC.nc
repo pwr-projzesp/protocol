@@ -5,6 +5,7 @@ implementation
 {
     components MainC;
     components ProtocolC as Proto;
+    components LedsC;
 
     components new AMSenderC(6) as Sender;
     components new AMReceiverC(6);
@@ -19,4 +20,5 @@ implementation
     Proto.AMControl -> ActiveMessageC;
     Proto.TimeoutTimer -> TimeoutTimer;
     Proto.SendTimer -> SendTimer;
+    Proto.Leds -> LedsC;
 }
