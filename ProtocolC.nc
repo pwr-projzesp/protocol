@@ -1,62 +1,49 @@
-#include "printf.h"
+#include "ProtocolC.h"
 
-typedef struct _protocol_message
-{
-    uint8_t dest;
-    uint8_t src;
-    uint8_t cmd;
-    uint8_t data[1];
-} protocol_message;
-
-typedef struct _neighbour_desc
-{
-    uint8_t neighbour_id;
-    uint8_t priority;
-} neighbour_desc;
-
-module ProtocolC @safe()
+module ProtocolC
 {
     uses
     {
         interface Boot;
-        // blink on some communication action
         interface Leds;
         interface Receive as ReceiveREQ;
-        interface Timer<TMilli> as TimeoutTimer;
-        interface Timer<TMilli> as SendTimer;
+        interface Timer<TMilli> as Timer;
+        interface Timer<TMilli> as RetransmitTimer;
         interface AMSend;
         interface Packet;
         interface SplitControl as AMControl;
-    }
-
-    provides
-    {
-        interface ProtocolSend;
-        interface Receive;
     }
 }
 
 implementation
 {
-    bool send_pending = FALSE;
-    bool message_pending = TRUE;
-    // unused right now
-    neighbour_desc neighbours[16] = { { 0, 0 }, { 1, 0 }, { 2, 0 } };
-    uint8_t neighbour_count = 3;
+    message_t packet;
 
-    message_t proto_msg;
+    message_t retransmit_packet;
+    bool retransmit_pending = FALSE;
+
+    nx_uint16_t curr_seq_id[PROTOCOL_MAX_MOTE_ID];
+    nx_uint16_t own_seq_id;
+    uint8_t target = 0;
 
     event void Boot.booted()
     {
+        int i;
+
         call AMControl.start();
+        own_seq_id = 0;
+
+        for (i = 0; i < PROTOCOL_MAX_MOTE_ID; ++i)
+        {
+            curr_seq_id[i] = 0;
+        }
     }
 
     event void AMControl.startDone(error_t err)
     {
         if (err == SUCCESS)
         {
-            call SendTimer.startPeriodic(1000);
-            call TimeoutTimer.startPeriodic(100);
+            call Timer.startPeriodic(250);
         }
         else
         {
@@ -68,110 +55,113 @@ implementation
     {
     }
 
-    task void resend()
+    event void AMSend.sendDone(message_t * msg, error_t err)
     {
-        if (message_pending && !send_pending)
-        {
-            if (call AMSend.send(AM_BROADCAST_ADDR, &proto_msg, call Packet.payloadLength(&proto_msg)) == SUCCESS)
-            {
-                send_pending = TRUE;
-                message_pending = FALSE;
-            }
-        }
     }
 
-    event void TimeoutTimer.fired()
+    void send_ack(nx_uint16_t seq_id, nx_uint16_t src)
     {
-        if (message_pending)
-        {
-            post resend();
-        }
-    }
+        int i;
+        protocol_message_t protomsg;
+        uint8_t * data = (uint8_t *)&protomsg;
 
-    message_t dummy;
-    bool diode = FALSE;
+        protomsg.seq_id = seq_id;
+        protomsg.src = TOS_NODE_ID;
+        protomsg.dest = src;
+        protomsg.cmd = PROTOCOL_CMD_ACK;
 
-    event void SendTimer.fired()
-    {
-        if (TOS_NODE_ID != 1)
+        for (i = 0; i < sizeof(protocol_message_t); ++i)
         {
-            dummy.data[0] = diode;
-            diode = !diode;
-            call ProtocolSend.send(1, &dummy, 1); //call Packet.payloadLength(&dummy)):
+            packet.data[i] = data[i];
         }
-    }
 
-    event void AMSend.sendDone(message_t * message, error_t error)
-    {
-        if (error == SUCCESS)
-        {
-            send_pending = FALSE;
-        }
-        else
-        {
-            message_pending = TRUE;
-        }
-    }
-
-    error_t send_message(uint8_t source, uint8_t destination, message_t * message, uint8_t length)
-    {
-        int i = 0;
-        protocol_message * msg = (protocol_message *)&proto_msg;
-        msg->dest = destination;
-        msg->src = source;
-        for (i = 0; i < length; ++i)
-        {
-            msg->data[i] = message->data[i];
-        }
-        send_pending = TRUE;
-        return call AMSend.send(AM_BROADCAST_ADDR, &proto_msg, call Packet.payloadLength(&proto_msg));
+        call AMSend.send(AM_BROADCAST_ADDR, &packet, sizeof(protocol_message_t));
     }
 
     event message_t * ReceiveREQ.receive(message_t * msg, void * payload, uint8_t len)
     {
-        protocol_message * pmsg = (protocol_message *)msg->data;
-        if (TOS_NODE_ID == 1 && pmsg->dest == 1)
-        {
-            if (pmsg->src == 2)
-            {
-                if (pmsg->data[0] == TRUE)
-                {
-                    call Leds.led1On();
-                }
+        protocol_message_t * protomsg = (protocol_message_t *)msg->data;
 
-                else
+        switch (protomsg->cmd)
+        {
+        case PROTOCOL_CMD_LED:
+            if (protomsg->dest == TOS_NODE_ID)
+            {
+                call Leds.led0Toggle();
+                send_ack(protomsg->seq_id, protomsg->src);
+            }
+
+            else if (protomsg->src == TOS_NODE_ID)
+            {
+                // received our own message back. do nothing.
+                call Leds.led1Toggle();
+            }
+
+            else if (protomsg->seq_id > curr_seq_id[protomsg->src])
+            {
+                int i;
+
+                curr_seq_id[protomsg->src] = protomsg->seq_id;
+                call Leds.led2Toggle();
+
+                if (!retransmit_pending)
                 {
-                    call Leds.led1Off();
+                    retransmit_pending = TRUE;
+                    call RetransmitTimer.startOneShot(50);
+                    for (i = 0; i < sizeof(protocol_message_t); ++i)
+                    {
+                        retransmit_packet.data[i] = msg->data[i];
+                    }
                 }
             }
 
-            else if (pmsg->src == 3)
-            {
-                if (pmsg->data[0] == TRUE)
-                {
-                    call Leds.led2On();
-                }
+            break;
 
-                else
+        case PROTOCOL_CMD_ACK:
+            {
+                protocol_message_t * pending = (protocol_message_t *)retransmit_packet.data;
+                if (retransmit_pending && pending->dest == protomsg->src && pending->seq_id <= protomsg->seq_id)
                 {
-                    call Leds.led2Off();
+                    retransmit_pending = FALSE;
                 }
             }
-        }
-
-        call Leds.led0Toggle();
-
-        if (pmsg->dest != TOS_NODE_ID)
-        {
-            send_message(pmsg->src, pmsg->dest, msg, len);
         }
 
         return msg;
     }
 
-    command error_t ProtocolSend.send(uint8_t destination, message_t * message, uint8_t length)
+    event void Timer.fired()
     {
-        return send_message(TOS_NODE_ID, destination, message, length);
+        if (TOS_NODE_ID == 1)
+        {
+            protocol_message_t protomsg;
+            uint8_t * data = (uint8_t *)&protomsg;
+            int i;
+
+            protomsg.seq_id = own_seq_id++;
+            protomsg.src = TOS_NODE_ID;
+            protomsg.dest = 2 + target;
+            protomsg.cmd = PROTOCOL_CMD_LED;
+            target = !target;
+
+            for (i = 0; i < sizeof(protocol_message_t); ++i)
+            {
+                packet.data[i] = data[i];
+            }
+
+            call AMSend.send(AM_BROADCAST_ADDR, &packet, sizeof(protocol_message_t));
+            call Leds.led2Toggle();
+        }
+    }
+
+    event void RetransmitTimer.fired()
+    {
+        if (retransmit_pending)
+        {
+            retransmit_pending = FALSE;
+            call AMSend.send(AM_BROADCAST_ADDR, &retransmit_packet, sizeof(protocol_message_t));
+            call Leds.led1Toggle();
+        }
     }
 }
 

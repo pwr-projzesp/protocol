@@ -11,16 +11,15 @@ implementation
     components new AMReceiverC(6) as Receiver;
     components ActiveMessageC;
 
-    components new TimerMilliC() as Timer;
-    components new TimerMilliC() as RetransmitTimer;
+    components new TimerMilliC() as TimeoutTimer;
+    components new TimerMilliC() as SendTimer;
 
     Proto.Boot -> MainC.Boot;
     Proto.AMSend -> Sender;
     Proto.ReceiveREQ -> Receiver;
     Proto.Packet -> Sender;
     Proto.AMControl -> ActiveMessageC;
-    Proto.Timer -> Timer;
-    Proto.RetransmitTimer -> RetransmitTimer;
+    Proto.TimeoutTimer -> TimeoutTimer;
+    Proto.SendTimer -> SendTimer;
     Proto.Leds -> LedsC;
 }
-
