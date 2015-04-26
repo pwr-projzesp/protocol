@@ -6,6 +6,8 @@ implementation
     components MainC;
     components ProtocolC as Proto;
     components LedsC;
+    components PrintfC;
+    components SerialStartC;
 
     components new AMSenderC(6) as Sender;
     components new AMReceiverC(6) as Receiver;
