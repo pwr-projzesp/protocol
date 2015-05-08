@@ -14,7 +14,7 @@ typedef struct routing_entry
 {
     uint16_t seq_id;
     uint16_t next;
-    uint8_t hop;
+    uint8_t hops;
 } routing_entry_t;
 
 // route request cache
@@ -33,4 +33,9 @@ typedef struct rrc_entry
 #define PROTOCOL_CMD_ACK 1
 #define PROTOCOL_CMD_RRQ 2 // route request
 #define PROTOCOL_CMD_RRR 3 // route request reply
+
+bool is_routing_command(uint16_t command)
+{
+    return command == PROTOCOL_CMD_RRQ || command == PROTOCOL_CMD_RRR;
+}
 

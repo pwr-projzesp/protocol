@@ -14,7 +14,8 @@ implementation
     components ActiveMessageC;
 
     components new TimerMilliC() as Timer;
-    components new TimerMilliC() as RetransmitTimer;
+    components new TimerMilliC() as RRQTimer;
+    components new TimerMilliC() as ACKTimer;
 
     Proto.Boot -> MainC.Boot;
     Proto.AMSend -> Sender;
@@ -22,7 +23,8 @@ implementation
     Proto.Packet -> Sender;
     Proto.AMControl -> ActiveMessageC;
     Proto.Timer -> Timer;
-    Proto.RetransmitTimer -> RetransmitTimer;
+    Proto.RRQTimer -> RRQTimer;
+    Proto.ACKTimer -> ACKTimer;
     Proto.Leds -> LedsC;
 }
 
