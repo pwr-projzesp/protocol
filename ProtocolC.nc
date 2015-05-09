@@ -100,7 +100,7 @@ implementation
 
         call AMSend.send(AM_BROADCAST_ADDR, &packet, sizeof(protocol_message_t));
 
-        if (!is_routing_command(cmd))
+        if (!is_routing_command(cmd) && cmd != PROTOCOL_CMD_ACK)
         {
             setup_pending_ack(seq_id, dest);
         }
@@ -322,6 +322,7 @@ implementation
             if (pending_acks[i] && ++unacked_counts[i] == 1)
             {
                 routing_entries[i].seq_id = 0;
+                send_routing_request_delayed(++own_seq_id, i, TRUE);
             }
         }
     }
