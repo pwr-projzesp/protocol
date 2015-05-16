@@ -227,7 +227,7 @@ implementation
             if (protomsg->dest == TOS_NODE_ID)
             {
                 pending_acks[protomsg->src] = FALSE;
-                --unacked_counts[protomsg->src];
+                unacked_counts[protomsg->src] = 0;
             }
 
             break;
