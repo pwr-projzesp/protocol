@@ -321,6 +321,7 @@ implementation
         {
             if (pending_acks[i] && ++unacked_counts[i] == 1)
             {
+                pending_acks[i] = FALSE;
                 routing_entries[i].seq_id = 0;
                 send_routing_request_delayed(++own_seq_id, i, TRUE);
             }
