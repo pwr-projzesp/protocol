@@ -14,6 +14,9 @@ module ProtocolC
         interface AMSend;
         interface Packet;
         interface SplitControl as AMControl;
+        interface PacketField<uint8_t> as PacketLinkQuality;
+        interface PacketField<uint8_t> as PacketRSSI;
+        interface Receive as ReceiveSerial;
     }
 }
 
@@ -31,7 +34,6 @@ implementation
     nx_uint16_t pending_ack_src;
 
     bool pending_acks[PROTOCOL_MAX_MOTE_ID];
-    uint8_t unacked_counts[PROTOCOL_MAX_MOTE_ID];
 
     nx_uint16_t curr_seq_id[PROTOCOL_MAX_MOTE_ID];
     nx_uint16_t own_seq_id;
@@ -50,7 +52,7 @@ implementation
         {
             curr_seq_id[i] = 0;
             routing_entries[i].seq_id = 0;
-            unacked_counts[i] = 0;
+            pending_acks[i] = FALSE;
         }
     }
 
@@ -70,14 +72,10 @@ implementation
     {
     }
 
-    event void AMSend.sendDone(message_t * msg, error_t err)
-    {
-    }
-
     void setup_pending_ack(nx_uint16_t seq_id, nx_uint16_t src)
     {
         pending_acks[src] = TRUE;
-        call ACKTimer.startOneShot(50);
+        call ACKTimer.startOneShot(150);
     }
 
     void send_message(nx_uint16_t seq_id, nx_uint16_t dest, nx_uint16_t cmd, nx_uint16_t data1, nx_uint16_t data2)
@@ -113,15 +111,6 @@ implementation
         send_message(seq_id, src, PROTOCOL_CMD_ACK, 0, 0);
     }
 
-    task void send_ack_delayed_task()
-    {
-        if (pending_ack)
-        {
-            pending_ack = TRUE;
-            send_ack(pending_ack_seq_id, pending_ack_src);
-        }
-    }
-
     void send_ack_delayed(nx_uint16_t seq_id, nx_uint16_t src)
     {
         if (!pending_ack)
@@ -129,7 +118,6 @@ implementation
             pending_ack = TRUE;
             pending_ack_seq_id = seq_id;
             pending_ack_src = src;
-            post send_ack_delayed_task();
         }
     }
 
@@ -145,12 +133,13 @@ implementation
         printf("seding rrq, seq_id: %d, dest: %d\n", seq_id, dest);
         printfflush();
         call Leds.led1Toggle();
+
         send_message(seq_id, 0, PROTOCOL_CMD_RRQ, dest, flush);
     }
 
     void send_routing_request_delayed(nx_uint16_t seq_id, nx_uint16_t dest, bool flush)
     {
-        if (!pending_rrq)
+        if (!pending_rrq && !routing_entries[dest].seq_id)
         {
             pending_rrq = TRUE;
             pending_rrq_seq_id = seq_id;
@@ -168,9 +157,33 @@ implementation
         send_message(seq_id, dest, PROTOCOL_CMD_RRR, src, hops);
     }
 
+    event void AMSend.sendDone(message_t * msg, error_t err)
+    {
+        if (pending_ack)
+        {
+            send_ack(pending_ack_seq_id, pending_ack_src);
+            pending_ack = FALSE;
+        }
+    }
+
+    event message_t * ReceiveSerial.receive(message_t * msg, void * payload, uint8_t len)
+    {
+        return msg;
+    }
+
     event message_t * ReceiveREQ.receive(message_t * msg, void * payload, uint8_t len)
     {
-        protocol_message_t * protomsg = (protocol_message_t *)msg->data;
+        protocol_message_t * protomsg;
+
+        printf("RSSI: %d\n", call PacketRSSI.get(msg));
+        printfflush();
+
+        if (call PacketRSSI.get(msg) < 3)
+        {
+            return msg;
+        }
+
+        protomsg = (protocol_message_t *)msg->data;
 
         if (!routing_entries[protomsg->src].seq_id || routing_entries[protomsg->src].hops)
         {
@@ -178,6 +191,11 @@ implementation
             routing_entries[protomsg->src].seq_id = protomsg->seq_id;
             routing_entries[protomsg->src].next = protomsg->src;
             routing_entries[protomsg->src].hops = 0;
+        }
+
+        if (pending_rrq_dest == protomsg->src)
+        {
+            pending_rrq = FALSE;
         }
 
         switch (protomsg->cmd)
@@ -224,10 +242,12 @@ implementation
             break;
 
         case PROTOCOL_CMD_ACK:
+            printf("got ACK, seq_id: %d, from %d to %d\n", protomsg->seq_id, protomsg->src, protomsg->dest);
+            printfflush();
+
             if (protomsg->dest == TOS_NODE_ID)
             {
                 pending_acks[protomsg->src] = FALSE;
-                unacked_counts[protomsg->src] = 0;
             }
 
             break;
@@ -252,7 +272,7 @@ implementation
 
             else
             {
-                send_routing_request_delayed(++own_seq_id, protomsg->data1, protomsg->data2);
+                send_routing_request_delayed(protomsg->seq_id, protomsg->data1, protomsg->data2);
             }
 
             break;
@@ -290,17 +310,21 @@ implementation
         {
             if (routing_entries[target].seq_id)
             {
+                printf("sending LED to %d via %d\n", target, routing_entries[target].next);
+                printfflush();
+
                 send_message(++own_seq_id, routing_entries[target].next, PROTOCOL_CMD_LED, target, TOS_NODE_ID);
-                if (++target == 5)
-                {
-                    target = 2;
-                }
                 call Leds.led2Toggle();
             }
 
             else
             {
                 send_routing_request(++own_seq_id, target, FALSE);
+            }
+
+            if (++target == 5)
+            {
+                target = 2;
             }
         }
     }
@@ -319,11 +343,15 @@ implementation
         int i;
         for (i = 0; i < PROTOCOL_MAX_MOTE_ID; ++i)
         {
-            if (pending_acks[i] && ++unacked_counts[i] == 1)
+            if (pending_acks[i])
             {
+                printf("forgetting route to %d\n", i);
+                printfflush();
+
                 pending_acks[i] = FALSE;
                 routing_entries[i].seq_id = 0;
                 send_routing_request_delayed(++own_seq_id, i, TRUE);
+                break;
             }
         }
     }

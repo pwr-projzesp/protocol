@@ -20,10 +20,9 @@ typedef struct routing_entry
 // route request cache
 typedef struct rrc_entry
 {
+    bool valid;
     uint16_t seq_id;
-    uint16_t src;
     uint16_t dest;
-    uint8_t hop;
 } rrc_entry_t;
 
 #define PROTOCOL_MAX_MOTE_ID 32

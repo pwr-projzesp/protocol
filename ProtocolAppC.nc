@@ -3,6 +3,9 @@ configuration ProtocolAppC
 }
 implementation
 {
+    components RF230ActiveMessageC;
+    components SerialActiveMessageC;
+
     components MainC;
     components ProtocolC as Proto;
     components LedsC;
@@ -21,10 +24,13 @@ implementation
     Proto.AMSend -> Sender;
     Proto.ReceiveREQ -> Receiver;
     Proto.Packet -> Sender;
-    Proto.AMControl -> ActiveMessageC;
+    Proto.AMControl -> RF230ActiveMessageC;
     Proto.Timer -> Timer;
     Proto.RRQTimer -> RRQTimer;
     Proto.ACKTimer -> ACKTimer;
     Proto.Leds -> LedsC;
+    Proto.PacketLinkQuality -> RF230ActiveMessageC.PacketLinkQuality;
+    Proto.PacketRSSI -> RF230ActiveMessageC.PacketRSSI;
+    Proto.ReceiveSerial -> SerialActiveMessageC.Receive[0];
 }
 
