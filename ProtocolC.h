@@ -8,6 +8,7 @@ typedef nx_struct protocol_message
     nx_uint16_t cmd;
     nx_uint16_t data1;
     nx_uint16_t data2;
+    nx_uint16_t data3;
 } protocol_message_t;
 
 typedef struct routing_entry
@@ -32,6 +33,8 @@ typedef struct rrc_entry
 #define PROTOCOL_CMD_ACK 1
 #define PROTOCOL_CMD_RRQ 2 // route request
 #define PROTOCOL_CMD_RRR 3 // route request reply
+#define PROTOCOL_CMD_TRC 4 // trace route
+#define PROTOCOL_CMD_TRR 5 // trace route reply
 
 bool is_routing_command(uint16_t command)
 {
